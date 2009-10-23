@@ -11,6 +11,15 @@ class ScopedCategory < ActiveRecord::Base
   acts_as_nested_set :scope => :organization
   set_table_name 'categories'
 end
+class ValidatingCategory < ActiveRecord::Base
+  acts_as_nested_set
+  set_table_name 'categories'
+  validate :parent_is_nil_or_named_top_level
+
+  def parent_is_nil_or_named_top_level
+    errors.add :parent_id, 'Invalid parent' unless parent_id.nil? || parent.name == 'Top Level'
+  end
+end
 class RenamedColumns < ActiveRecord::Base
   acts_as_nested_set :parent_column => 'mother_id', :left_column => 'red', :right_column => 'black'
 end
@@ -754,5 +763,20 @@ class AwesomeNestedSetTest < TestCaseClass
       model.acts_as_nested_set
       model.new(:name => 'foo')
     end
+  end
+
+  def test_tree_order_named_scope
+    @categories = Category.tree_order
+    assert_equal [1, 2, 3, 4, 5, 6], @categories.map{ |category| category.id }
+  end
+
+  def test_move_to_validation_raises_exception_if_invalid
+    category = ValidatingCategory.find_by_name("Child 2")
+    assert_raise(ActiveRecord::ActiveRecordError) { category.move_to_child_of categories(:child_1) }
+  end
+
+  def test_move_to_validation_raises_no_exception_if_valid
+    category = ValidatingCategory.find_by_name("Child 2.1")
+    assert_nothing_raised { category.move_to_child_of categories(:top_level) }
   end
 end

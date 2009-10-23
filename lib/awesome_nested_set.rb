@@ -568,7 +568,18 @@ module CollectiveIdea #:nodoc:
             unless position == :root || move_possible?(target)
               raise ActiveRecord::ActiveRecordError, "Impossible move, target node cannot be inside moved tree."
             end
-            
+
+            new_parent = case position
+              when :child;  target.id
+              when :root;   nil
+              else          target[parent_column_name]
+            end
+
+            self[parent_column_name] = new_parent
+            unless valid?
+              raise ActiveRecord::ActiveRecordError, "Impossible move, new parent is not valid."
+            end
+
             bound = case position
               when :child;  target[right_column_name]
               when :left;   target[left_column_name]
@@ -590,19 +601,6 @@ module CollectiveIdea #:nodoc:
             # we have defined the boundaries of two non-overlapping intervals, 
             # so sorting puts both the intervals and their boundaries in order
             a, b, c, d = [self[left_column_name], self[right_column_name], bound, other_bound].sort
-
-            new_parent = case position
-              when :child;  target.id
-              when :root;   nil
-              else          target[parent_column_name]
-            end
-
-            # TODO Add test for parent validation
-            if respond_to? :new_parent_id_valid?
-              unless new_parent_id_valid?(new_parent)
-                raise ActiveRecord::ActiveRecordError, "Impossible move, new parent is not valid."
-              end
-            end
 
             self.class.base_class.update_all([
               "#{quoted_left_column_name} = CASE " +
