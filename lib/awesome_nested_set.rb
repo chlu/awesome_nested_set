@@ -547,6 +547,13 @@ module CollectiveIdea #:nodoc:
               else          target[parent_column_name]
             end
 
+            # TODO Add test for parent validation
+            if respond_to? :new_parent_id_valid?
+              unless new_parent_id_valid?(new_parent)
+                raise ActiveRecord::ActiveRecordError, "Impossible move, new parent is not valid."
+              end
+            end
+
             self.class.base_class.update_all([
               "#{quoted_left_column_name} = CASE " +
                 "WHEN #{quoted_left_column_name} BETWEEN :a AND :b " +
