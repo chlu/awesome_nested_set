@@ -88,6 +88,7 @@ module CollectiveIdea #:nodoc:
           
             named_scope :roots, :conditions => {parent_column_name => nil}, :order => quoted_left_column_name
             named_scope :leaves, :conditions => "#{quoted_right_column_name} - #{quoted_left_column_name} = 1", :order => quoted_left_column_name
+            named_scope :tree_order, :order => quoted_left_column_name
 
             define_callbacks("before_move", "after_move")
           end
@@ -423,9 +424,57 @@ module CollectiveIdea #:nodoc:
             "#{'*'*(node.level+1)} #{node.id} #{node.to_s} (#{node.parent_id}, #{node.left}, #{node.right})"
           end.join("\n")
         end
-        
+
+        # Create a nested array representation of a tree from an array of records
+        # (complete and sorted by left column) without other queries.
+        #
+        # An optional block can be used to create a custom Hash for each node.
+        # 
+        # Example:
+        #    Category.result_to_array(Category.tree_order)
+        #
+        def result_to_array(result, options = {}, &block)
+          array = []
+          inner_recursion = options.delete(:inner_recursion)
+          result_set = inner_recursion ? result : result.dup
+
+          parent_id = (options.delete(:parent_id) || result_set.first[result_set.first.parent_column_name]) rescue nil
+          level = options[:level] || 0
+          options[:children] ||= 'children'
+          options[:methods] ||= []
+          options[:nested] = true unless options.key?(:nested)
+          options[:symbolize_keys] = true unless options.key?(:symbolize_keys)
+
+          if options[:only].blank? && options[:except].blank?
+            options[:except] = [:left_column, :right_column, :parent_column].inject([]) do |ex, opt|
+              column = acts_as_nested_set_options[opt].to_sym
+              ex << column unless ex.include?(column)
+              ex
+            end
+          end
+
+          siblings = options[:nested] ? result_set.select { |s| s[s.parent_column_name] == parent_id } : result_set
+          siblings.each do |sibling|
+            result_set.delete(sibling)
+            node = block_given? ? block.call(sibling, level) : ActiveRecord::Serialization::Serializer.new(sibling, :only => options[:only], :except => options[:except], :methods => options[:methods]).serializable_record
+            if options[:nested]
+              opts = options.merge(:parent_id => sibling.id, :level => level + 1, :inner_recursion => true)
+              childnodes = result_to_array(result_set, opts, &block)
+              node[options[:children]] = childnodes if !childnodes.empty? && node.respond_to?(:[]=)
+            end
+            array << (options[:symbolize_keys] && node.respond_to?(:symbolize_keys) ? node.symbolize_keys : node)
+          end
+          unless inner_recursion
+            result_set.each do |orphan|
+              node = (block_given? ? block.call(orphan, level) : ActiveRecord::Serialization::Serializer.new(orphan, :only => options[:only], :except => options[:except], :methods => options[:methods]).serializable_record)
+              array << (options[:symbolize_keys] && node.respond_to?(:symbolize_keys) ? node.symbolize_keys : node)
+            end
+          end
+          array
+        end
+
       protected
-      
+
         def without_self(scope)
           scope.scoped :conditions => ["#{self.class.quoted_table_name}.#{self.class.primary_key} != ?", self]
         end
