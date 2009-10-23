@@ -222,7 +222,6 @@ module CollectiveIdea #:nodoc:
         # Example:
         #    Category.result_to_array(Category.tree_order)
         #
-        # TODO write a test for this method
         def result_to_array(result, options = {}, &block)
           array = []
           inner_recursion = options.delete(:inner_recursion)

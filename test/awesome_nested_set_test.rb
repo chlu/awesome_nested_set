@@ -779,4 +779,12 @@ class AwesomeNestedSetTest < TestCaseClass
     category = ValidatingCategory.find_by_name("Child 2.1")
     assert_nothing_raised { category.move_to_child_of categories(:top_level) }
   end
+
+  def test_result_to_array_returns_nested_array
+    @tree = Category.result_to_array(Category.tree_order)
+    assert_equal "Top Level", @tree.first[:name]
+    assert_equal "Child 1", @tree.first[:children].first[:name]
+    assert_equal "Child 2", @tree.first[:children].second[:name]
+    assert_equal "Top Level 2", @tree.second[:name]
+  end
 end
